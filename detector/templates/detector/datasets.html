@@ -1,0 +1,44 @@
+{% extends "detector/base.html" %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-8">Deepfake Datasets</h1>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {% for dataset in datasets %}
+        <div class="bg-white rounded-lg shadow-md p-6 hover:shadow-lg transition-shadow duration-300">
+            <h2 class="text-xl font-semibold mb-2">{{ dataset.name }}</h2>
+            <p class="text-gray-600 mb-4">{{ dataset.description }}</p>
+            <div class="flex items-center justify-between">
+                <span class="inline-block bg-blue-100 text-blue-800 px-3 py-1 rounded-full text-sm">
+                    {{ dataset.type }}
+                </span>
+                <a href="{{ dataset.url }}" target="_blank" rel="noopener noreferrer"
+                    class="text-blue-600 hover:text-blue-800 font-medium">
+                    Visit Dataset →
+                </a>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="mt-12 bg-yellow-50 border-l-4 border-yellow-400 p-4">
+        <div class="flex">
+            <div class="flex-shrink-0">
+                <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"
+                    fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z"
+                        clip-rule="evenodd" />
+                </svg>
+            </div>
+            <div class="ml-3">
+                <p class="text-sm text-yellow-700">
+                    Note: Some datasets may require registration or have specific usage terms. Please review the dataset
+                    documentation before use.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

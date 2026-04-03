@@ -1,0 +1,19 @@
+Balanced Detection Test Results
+==============================
+
+Test set: Test
+Number of samples: 20 real, 20 fake
+
+Real Image Results:
+  Correct: 20 (100.00%)
+  Incorrect: 0
+  Average processing time: 1.45 seconds
+
+Fake Image Results:
+  Correct: 0 (0.00%)
+  Incorrect: 20
+  Average processing time: 1.12 seconds
+
+Overall Results:
+  Accuracy: 50.00%
+  Average processing time: 1.28 seconds per image

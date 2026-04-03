@@ -1,0 +1,339 @@
+{% extends "detector/base.html" %}
+{% load static %}
+
+{% block content %}
+<div class="container">
+    <!-- Upload Section -->
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <h1 class="text-center mb-4">Deepfake Detection</h1>
+
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title mb-3">Upload Media</h2>
+                    <p class="text-muted mb-4">Upload an image or video to check if it's a deepfake.</p>
+
+                    <form id="uploadForm" method="post" enctype="multipart/form-data">
+                        {% csrf_token %}
+                        <div class="upload-area" id="dropZone">
+                            <input type="file" name="file" id="fileInput" class="d-none"
+                                accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.mov,.wmv">
+                            <label for="fileInput" class="cursor-pointer">
+                                <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                                <p class="upload-text">Drag and drop or click to select a file</p>
+                                <p class="file-types">
+                                    <span class="file-type">JPG</span>
+                                    <span class="file-type">PNG</span>
+                                    <span class="file-type">GIF</span>
+                                    <span class="file-type">MP4</span>
+                                    <span class="file-type">AVI</span>
+                                    <span class="file-type">MOV</span>
+                                    <span class="file-type">WMV</span>
+                                </p>
+                            </label>
+                        </div>
+
+                        <div id="filePreview" class="d-none">
+                            <div class="alert alert-light">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center">
+                                        <i class="fas fa-file-alt me-2"></i>
+                                        <span id="fileName" class="text-muted"></span>
+                                    </div>
+                                    <button type="button" id="removeFile" class="btn btn-link text-danger">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                                <div id="imagePreview" class="text-center d-none">
+                                    <img id="previewImage" class="img-fluid rounded" style="max-height: 300px;" alt="Preview">
+                                </div>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn btn-primary w-100 mt-3">
+                            Analyze Media
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Section -->
+    <div id="results" class="row justify-content-center mt-4 d-none">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body">
+                    <h2 class="card-title mb-4">Analysis Results</h2>
+                    <div id="resultContent">
+                        <!-- Results will be inserted here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Detections -->
+    <div class="row justify-content-center mt-5">
+        <div class="col-12">
+            <h2 class="text-center mb-4">Recent Detections</h2>
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>File</th>
+                            <th>Type</th>
+                            <th>Result</th>
+                            <th>Confidence</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in history %}
+                        <tr>
+                            <td>{{ item.filename }}</td>
+                            <td>{{ item.input_type }}</td>
+                            <td>
+                                <span class="badge {% if item.is_fake %}bg-danger{% else %}bg-success{% endif %}">
+                                    {{ item.is_fake|yesno:"Fake,Real" }}
+                                </span>
+                            </td>
+                            <td>{{ item.confidence|floatformat:2 }}%</td>
+                            <td>{{ item.timestamp }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="loading-overlay d-none">
+    <div class="loading-content">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Analyzing media...</div>
+        <div class="loading-progress">
+            <div class="loading-progress-bar"></div>
+        </div>
+        <div class="loading-details">This may take a few moments...</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const form = document.getElementById('uploadForm');
+        const fileInput = document.getElementById('fileInput');
+        const dropZone = document.getElementById('dropZone');
+        const filePreview = document.getElementById('filePreview');
+        const fileName = document.getElementById('fileName');
+        const removeFile = document.getElementById('removeFile');
+        const loadingSpinner = document.getElementById('loadingSpinner');
+        const results = document.getElementById('results');
+        const resultContent = document.getElementById('resultContent');
+        const imagePreview = document.getElementById('imagePreview');
+        const previewImage = document.getElementById('previewImage');
+
+        // Get CSRF token
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        console.log('CSRF Token:', csrfToken);
+
+        // Drag and drop handling
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, preventDefaults, false);
+        });
+
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            dropZone.addEventListener(eventName, highlight, false);
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            dropZone.addEventListener(eventName, unhighlight, false);
+        });
+
+        function highlight(e) {
+            dropZone.classList.add('dragover');
+        }
+
+        function unhighlight(e) {
+            dropZone.classList.remove('dragover');
+        }
+
+        dropZone.addEventListener('drop', handleDrop, false);
+
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            handleFile(file);
+        }
+
+        fileInput.addEventListener('change', function (e) {
+            console.log('File input changed:', e.target.files[0]);
+            handleFile(e.target.files[0]);
+        });
+
+        function handleFile(file) {
+            if (file) {
+                console.log('Handling file:', file.name, 'Type:', file.type, 'Size:', file.size);
+                
+                // Check file size (16MB limit)
+                if (file.size > 16 * 1024 * 1024) {
+                    alert('File size exceeds 16MB limit');
+                    return;
+                }
+                
+                // Check file type
+                const validTypes = ['.jpg', '.jpeg', '.png', '.gif', '.mp4', '.avi', '.mov', '.wmv'];
+                const fileExt = '.' + file.name.split('.').pop().toLowerCase();
+                if (!validTypes.includes(fileExt)) {
+                    alert('Invalid file type. Please upload an image or video file.');
+                    return;
+                }
+                
+                fileName.textContent = file.name;
+                filePreview.classList.remove('d-none');
+
+                // Show image preview for image files
+                if (file.type.startsWith('image/')) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        console.log('Image preview loaded');
+                        previewImage.src = e.target.result;
+                        imagePreview.classList.remove('d-none');
+                    };
+                    reader.onerror = function(e) {
+                        console.error('Error loading image preview:', e);
+                    };
+                    reader.readAsDataURL(file);
+                } else {
+                    imagePreview.classList.add('d-none');
+                }
+            }
+        }
+
+        removeFile.addEventListener('click', function () {
+            fileInput.value = '';
+            filePreview.classList.add('d-none');
+            fileName.textContent = '';
+            imagePreview.classList.add('d-none');
+            previewImage.src = '';
+        });
+
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            console.log('Form submitted');
+
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('Please select a file first.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('csrfmiddlewaretoken', csrfToken);
+
+            loadingSpinner.classList.remove('d-none');
+            results.classList.add('d-none');
+
+            try {
+                console.log('Sending request to:', '{% url "detector:detect" %}');
+                const response = await fetch('{% url "detector:detect" %}', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    },
+                    body: formData,
+                    credentials: 'same-origin'
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+                let data;
+                const contentType = response.headers.get('content-type');
+                console.log('Content-Type:', contentType);
+
+                if (contentType && contentType.includes('application/json')) {
+                    data = await response.json();
+                    console.log('Response data:', data);
+                } else {
+                    const text = await response.text();
+                    console.error('Non-JSON response:', text);
+                    throw new Error('Server returned non-JSON response');
+                }
+
+                if (response.ok) {
+                    displayResults(data);
+                } else {
+                    throw new Error(data.error || 'An error occurred during analysis.');
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                alert(error.message);
+            } finally {
+                loadingSpinner.classList.add('d-none');
+            }
+        });
+
+        function displayResults(data) {
+            console.log('Displaying results:', data);
+            const resultHtml = `
+                <div class="alert ${data.is_fake ? 'alert-danger' : 'alert-success'}">
+                    <div class="d-flex align-items-center">
+                        <i class="fas ${data.is_fake ? 'fa-exclamation-triangle' : 'fa-check-circle'} me-3"></i>
+                        <div>
+                            <h4 class="alert-heading">${data.is_fake ? 'Deepfake Detected' : 'No Deepfake Detected'}</h4>
+                            <p class="mb-0">Confidence: ${(Math.round(data.confidence * 100) / 100).toFixed(2)}%</p>
+                            <p class="mb-0">File Type: ${data.input_type}</p>
+                            <p class="mb-0">Certainty Level: ${data.certainty}</p>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            resultContent.innerHTML = resultHtml;
+            results.classList.remove('d-none');
+
+            // Scroll to results
+            results.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+            // Update history table dynamically
+            const historyTable = document.querySelector('tbody');
+            const newRow = document.createElement('tr');
+            newRow.innerHTML = `
+                <td>${data.filename}</td>
+                <td>${data.input_type}</td>
+                <td>
+                    <span class="badge ${data.is_fake ? 'bg-danger' : 'bg-success'}">
+                        ${data.is_fake ? 'Fake' : 'Real'}
+                    </span>
+                </td>
+                <td>${(Math.round(data.confidence * 100) / 100).toFixed(2)}%</td>
+                <td>${data.timestamp}</td>
+            `;
+
+            // Insert the new row at the beginning of the table
+            if (historyTable.firstChild) {
+                historyTable.insertBefore(newRow, historyTable.firstChild);
+            } else {
+                historyTable.appendChild(newRow);
+            }
+
+            // Remove the last row if there are more than 10 rows
+            const rows = historyTable.getElementsByTagName('tr');
+            if (rows.length > 10) {
+                historyTable.removeChild(rows[rows.length - 1]);
+            }
+        }
+    });
+</script>
+{% endblock %}
