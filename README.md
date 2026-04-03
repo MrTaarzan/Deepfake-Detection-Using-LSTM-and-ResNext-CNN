@@ -75,4 +75,7 @@ MIT License
 
 ## Contributors
 
-[Your Name] 
+Abhinav G Pankaj
+Anusha K
+Drisya V S
+Gaanasri M S 
